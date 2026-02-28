@@ -1,5 +1,5 @@
 // Service Worker — кэширует всё приложение для оффлайн-работы
-const CACHE = 'chisty-prud-v1';
+const CACHE = 'chisty-prud-v2';
 const FILES = [
     './',
     './index.html',
@@ -10,6 +10,7 @@ const FILES = [
     './cashier.js',
     './admin.js',
     './manifest.json',
+    './icon.svg'
 ];
 
 self.addEventListener('install', (e) => {
