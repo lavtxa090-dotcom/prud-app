@@ -281,31 +281,10 @@ function printReceipt(orderId, datetime, items, phone, discountPct, globalRules)
   <div class="footer">${escHtml(AppConfig.FOOTER_TEXT)}</div>
 </body></html>`;
 
-    // Используем скрытый iframe для печати (работает в Android WebView/APK)
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
-
-    iframe.onload = () => {
-        try {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-        } catch (e) {
-            console.error('Ошибка печати в iframe', e);
-        }
-        // Удаляем iframe через небольшую паузу
-        setTimeout(() => document.body.removeChild(iframe), 2000);
-    };
+    const w = window.open('', '_blank', 'width=420,height=640');
+    w.document.write(html);
+    w.document.close();
+    w.onload = () => { w.print(); w.onafterprint = () => setTimeout(() => w.close(), 300); };
 }
 
 function escHtml(str) {
