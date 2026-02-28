@@ -158,8 +158,12 @@
                     <button class="btn btn-ghost" onclick="setToday()">Сегодня</button>
                     <button class="btn btn-ghost" onclick="setThisMonth()">Месяц</button>
                     <button class="btn btn-primary" onclick="applyFilter()">Применить</button>
-                    <button class="btn btn-amber" id="print-stats-btn" onclick="printStats()" disabled
-                        title="Сначала примените фильтр" style="margin-left:auto;">🖨 Печать статистики</button>
+                    <div style="margin-left:auto; display:flex; gap:6px;">
+                        <button class="btn btn-secondary" id="export-excel-btn" onclick="exportToExcel()" disabled
+                            title="Сначала примените фильтр">💾 В Excel</button>
+                        <button class="btn btn-amber" id="print-stats-btn" onclick="printStats()" disabled
+                            title="Сначала примените фильтр">🖨 Печать статистики</button>
+                    </div>
                 </div>
             </div>
 

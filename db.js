@@ -144,10 +144,29 @@ const DB = {
         const discount = Math.min(100, Math.max(0, Number(discountPct) || 0));
         const total = +(subtotal * (1 - discount / 100)).toFixed(2);
 
-        // Используем UUID вместо цифр (чтобы разные планшеты не сделали заказ с id=10 одновременно)
+        // Используем UUID вместо цифр для базы (чтобы разные планшеты не сделали заказ с id=10 одновременно)
         const orderId = generateUUID();
-        // Но для красоты чека сделаем короткий "Билет №" (последние 4 цифры+буквы)
-        const shortId = orderId.split('-')[1];
+
+        // Получаем дату для ежедневного сброса счетчика
+        const today = new Date().toLocaleDateString('ru-RU'); // например "28.02.2026"
+        let dailySeq = 1;
+
+        try {
+            const seqStr = localStorage.getItem('chisty_prud_daily_seq');
+            if (seqStr) {
+                const parsed = JSON.parse(seqStr);
+                if (parsed.date === today) {
+                    dailySeq = parsed.seq + 1;
+                }
+            }
+        } catch (e) {
+            // Игнорируем ошибки парсинга, начнем с 1
+        }
+
+        localStorage.setItem('chisty_prud_daily_seq', JSON.stringify({ date: today, seq: dailySeq }));
+
+        // Но для красоты чека сделаем короткий "Билет №" (порядковый номер за день)
+        const shortId = dailySeq.toString();
 
         const order = { uuid: orderId, shortId: shortId, datetime: Date.now(), total, phone: (phone || '').trim(), discount };
         this._data.orders.push(order);
@@ -324,10 +343,34 @@ function printReceipt(orderShortId, datetime, items, phone, discountPct, globalR
   <div class="footer">${escHtml(AppConfig.FOOTER_TEXT)}</div>
 </body></html>`;
 
-    const w = window.open('', '_blank', 'width=420,height=640');
-    w.document.write(html);
-    w.document.close();
-    w.onload = () => { w.print(); w.onafterprint = () => setTimeout(() => w.close(), 300); };
+    if (typeof nw !== 'undefined') {
+        nw.Window.open('about:blank', {
+            width: 400,
+            height: 600,
+            show: false,
+            title: `Чек #${orderShortId}`,
+        }, function (win) {
+            win.window.document.open();
+            win.window.document.write(html);
+            win.window.document.close();
+            win.window.onload = function () {
+                win.show();
+                win.print({
+                    autoprint: false,
+                    headerFooterEnabled: false,
+                    marginsType: 1
+                });
+                win.window.onafterprint = function () {
+                    setTimeout(() => win.close(true), 500);
+                };
+            };
+        });
+    } else {
+        const w = window.open('', '_blank', 'width=420,height=640');
+        w.document.write(html);
+        w.document.close();
+        w.onload = () => { w.print(); w.onafterprint = () => setTimeout(() => w.close(), 300); };
+    }
 }
 
 function escHtml(str) {

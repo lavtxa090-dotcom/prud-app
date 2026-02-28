@@ -159,6 +159,8 @@ function applyFilter() {
         renderOrders(stats.orders);
         const printBtn = document.getElementById('print-stats-btn');
         if (printBtn) printBtn.disabled = false;
+        const exportBtn = document.getElementById('export-excel-btn');
+        if (exportBtn) exportBtn.disabled = false;
     } catch (e) { showNotif('Ошибка загрузки статистики: ' + e.message, true); }
 }
 
@@ -427,14 +429,97 @@ function printStats() {
 </body>
 </html>`;
 
-    const w = window.open('', '_blank');
-    w.document.write(html);
-    w.document.close();
-    w.onload = () => {
-        w.print();
-        // Optional: you can self close if you prefer, but usually we let the user close it 
-        // since some browsers will kill the print window immediately if closed here
-    };
+    if (typeof nw !== 'undefined') {
+        nw.Window.open('about:blank', { width: 900, height: 700, show: false, title: 'Отчёт' }, function (win) {
+            win.window.document.open();
+            win.window.document.write(html);
+            win.window.document.close();
+            win.window.onload = function () {
+                win.show();
+                win.print({ autoprint: false, headerFooterEnabled: false });
+                win.window.onafterprint = function () { setTimeout(() => win.close(true), 600); };
+            };
+        });
+    } else {
+        const w = window.open('', '_blank');
+        w.document.write(html);
+        w.document.close();
+        w.onload = () => { w.print(); };
+    }
+}
+
+// ═══════════════════════════════
+// СТАТИСТИКА: ВЫГРУЗКА В EXCEL (CSV)
+// ═══════════════════════════════
+function exportToExcel() {
+    const fromStr = document.getElementById('date-from').value;
+    const toStr = document.getElementById('date-to').value;
+    const fromMs = new Date(fromStr + 'T00:00:00').getTime();
+    const toMs = new Date(toStr + 'T23:59:59').getTime();
+    const stats = DB.getStatsByPeriod(fromMs, toMs);
+
+    // Создаем HTML таблицу, которую Excel воспримет как родную
+    let tableHtml = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+        <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
+        <style>
+            table { border-collapse: collapse; }
+            th { background-color: #f2f2f2; font-weight: bold; border: 1px solid #000; padding: 5px; text-align: left; }
+            td { border: 1px solid #000; padding: 5px; }
+            .num { mso-number-format: "\\#\\,##0\\.00"; text-align: right; }
+        </style>
+    </head>
+    <body>
+        <table>
+            <thead>
+                <tr>
+                    <th>Номер билета</th>
+                    <th>Дата и время</th>
+                    <th>Операция</th>
+                    <th>Сумма (руб)</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+    stats.orders.forEach(o => {
+        const idStr = o.shortId || o.id;
+        const dt = fmtDate(o.datetime);
+        const summary = DB.getOrderSummary(o.uuid || o.id); // Точки с запятой здесь не страшны, так как это HTML ячейка
+        const total = o.total;
+
+        tableHtml += `
+                <tr>
+                    <td>${idStr}</td>
+                    <td>${dt}</td>
+                    <td>${summary}</td>
+                    <td class="num">${total.toString().replace('.', ',')}</td>
+                </tr>`;
+    });
+
+    tableHtml += `
+                <tr>
+                    <td colspan="3" style="text-align: right; font-weight: bold;">ИТОГО:</td>
+                    <td class="num" style="font-weight: bold;">${stats.revenue.toString().replace('.', ',')}</td>
+                </tr>
+            </tbody>
+        </table>
+    </body>
+    </html>`;
+
+    // Создаем Blob с mime-типом Excel и расширением .xls
+    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Отчет_Чистый_Пруд_${fromStr}_по_${toStr}.xls`;
+    document.body.appendChild(a);
+    a.click();
+
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
 }
 
 // ═══════════════════════════════
@@ -551,6 +636,7 @@ window.setToday = setToday;
 window.setThisMonth = setThisMonth;
 window.applyFilter = applyFilter;
 window.printStats = printStats;
+window.exportToExcel = exportToExcel;
 window.openOrderModal = openOrderModal;
 window.closeModal = closeModal;
 window.confirmDeleteOrder = confirmDeleteOrder;
