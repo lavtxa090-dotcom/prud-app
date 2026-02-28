@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#00d4aa">
+    <title>Администратор — Чистый пруд</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .page-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        @media(max-width:500px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .service-form-card {
+            display: none;
+            background: var(--surface);
+            border: 1px solid var(--accent);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .service-form-card.visible {
+            display: block;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .del-btn {
+            background: transparent;
+            border: none;
+            color: var(--danger);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            line-height: 1;
+        }
+
+        .del-btn:hover {
+            background: rgba(224, 82, 82, .15);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div>
+            <div class="topbar-title">🛠 Администратор</div>
+            <div class="topbar-subtitle">Чистый пруд</div>
+        </div>
+        <button class="btn btn-ghost" onclick="window.location.href='index.html'">← Выход</button>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" id="tab-services-btn" onclick="switchTab('services')">🛠 Услуги</button>
+        <button class="tab-btn" id="tab-stats-btn" onclick="switchTab('stats')">📈 Статистика</button>
+        <button class="tab-btn" id="tab-clients-btn" onclick="switchTab('clients')">👥 Клиенты</button>
+        <button class="tab-btn" id="tab-settings-btn" onclick="switchTab('settings')">⚙️ Настройки</button>
+    </div>
+
+    <div class="page-content">
+
+        <!-- ══ SERVICES ══ -->
+        <div class="tab-panel active" id="tab-services">
+            <div class="section-header">
+                <h2>🛠 Управление услугами</h2>
+                <button class="btn btn-primary" onclick="showAddForm()">＋ Добавить услугу</button>
+            </div>
+
+            <div id="service-form-card" class="service-form-card">
+                <h3 id="form-title" style="margin-bottom:14px;">Новая услуга</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Название услуги</label>
+                        <input type="text" id="f-name" placeholder="Аренда мангала" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Цена за единицу, ₽</label>
+                        <input type="number" id="f-price" placeholder="0.00" min="0" step="0.01" inputmode="decimal">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" id="save-btn" onclick="saveService()">💾 Сохранить</button>
+                    <button class="btn btn-ghost" onclick="cancelForm()">Отмена</button>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:40px;">#</th>
+                            <th>Название</th>
+                            <th style="width:140px;">Цена / ед.</th>
+                            <th style="width:120px;">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="services-tbody">
+                        <tr>
+                            <td colspan="4">
+                                <div class="empty-state">
+                                    <div class="empty-text">Нет услуг. Добавьте первую.</div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══ STATS ══ -->
+        <div class="tab-panel" id="tab-stats">
+            <h2 class="mb-2">📈 Статистика и заказы</h2>
+            <div class="flex-row mb-2" style="flex-wrap:wrap; gap:8px;">
+                <div class="form-group" style="flex:1; min-width:140px;">
+                    <label>Дата с</label>
+                    <input type="date" id="date-from">
+                </div>
+                <div class="form-group" style="flex:1; min-width:140px;">
+                    <label>Дата по</label>
+                    <input type="date" id="date-to">
+                </div>
+                <div class="flex-row" style="margin-top:22px; gap:6px;">
+                    <button class="btn btn-ghost" onclick="setToday()">Сегодня</button>
+                    <button class="btn btn-ghost" onclick="setThisMonth()">Месяц</button>
+                    <button class="btn btn-primary" onclick="applyFilter()">Применить</button>
+                </div>
+            </div>
+
+            <div class="stat-cards mb-2" id="stat-cards" style="display:none;"></div>
+
+            <div class="table-wrap mb-2" id="service-stats-wrap" style="display:none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Услуга</th>
+                            <th style="width:90px;">Кол-во</th>
+                            <th style="width:120px;">Выручка</th>
+                        </tr>
+                    </thead>
+                    <tbody id="service-stats-tbody"></tbody>
+                </table>
+            </div>
+
+            <h3 class="mb-2">Детализация заказов <span id="orders-period-label" class="text-dim"
+                    style="font-size:13px;font-weight:400;"></span></h3>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:60px;">№</th>
+                            <th style="width:140px;">Дата и время</th>
+                            <th style="width:110px;">Телефон</th>
+                            <th>Состав</th>
+                            <th style="width:100px;">Сумма</th>
+                            <th style="width:70px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="orders-tbody">
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state" style="padding:20px;">
+                                    <div class="empty-text">Выберите период и нажмите «Применить»</div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══ CLIENTS ══ -->
+        <div class="tab-panel" id="tab-clients">
+            <div class="section-header">
+                <h2>👥 База клиентов</h2>
+                <button class="btn btn-secondary" onclick="renderClients()">🔄 Обновить</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Телефон</th>
+                            <th style="width:70px;">Визитов</th>
+                            <th style="width:110px;">Потрачено</th>
+                            <th style="width:80px;">Скидка</th>
+                            <th>Заметка</th>
+                            <th style="width:50px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="clients-tbody">
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state" style="padding:20px;">
+                                    <div class="empty-text">Нет клиентов</div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══ SETTINGS ══ -->
+        <div class="tab-panel" id="tab-settings">
+            <h2 class="mb-2">⚙️ Настройки</h2>
+
+            <div class="card mb-2" style="max-width:640px;">
+                <h3 style="margin-bottom:10px;">📜 Правила территории</h3>
+                <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Печатается в каждом билете после
+                    списка услуг.</p>
+                <div class="form-group" style="margin-bottom:12px;">
+                    <textarea id="global-rules-input" rows="7"
+                        placeholder="Введите общие правила посещения..."></textarea>
+                </div>
+                <div class="flex-row">
+                    <button class="btn btn-primary" onclick="saveGlobalRules()">💾 Сохранить</button>
+                    <button class="btn btn-ghost" onclick="clearGlobalRules()">🗑 Очистить</button>
+                </div>
+                <div id="rules-save-msg" style="margin-top:10px;font-size:13px;min-height:18px;"></div>
+            </div>
+
+            <div class="card" style="max-width:520px;">
+                <h3 style="margin-bottom:14px;">🔐 Пароль администратора</h3>
+                <div id="pw-status-msg" style="margin-bottom:16px;font-size:13px;"></div>
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label id="pw-current-label">Текущий пароль</label>
+                    <input type="password" id="s-pw-current" placeholder="Текущий пароль для подтверждения">
+                </div>
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label>Новый пароль</label>
+                    <input type="password" id="s-pw-new" placeholder="Оставьте пустым чтобы убрать пароль">
+                </div>
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label>Повтор нового пароля</label>
+                    <input type="password" id="s-pw-confirm" placeholder="Повторите новый пароль">
+                </div>
+                <div class="flex-row">
+                    <button class="btn btn-primary" onclick="savePassword()">💾 Сохранить</button>
+                    <button class="btn btn-danger" id="remove-pw-btn" onclick="removePassword()"
+                        style="display:none;">🗑 Убрать пароль</button>
+                </div>
+                <div id="pw-save-msg" style="margin-top:12px;font-size:13px;min-height:18px;"></div>
+            </div>
+        </div>
+
+    </div><!-- /page-content -->
+
+    <!-- Modal: Order Details -->
+    <div class="modal-overlay" id="order-modal">
+        <div class="modal" style="width:560px;">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-title">Детализация заказа</div>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="table-wrap mb-2">
+                <table id="order-detail-table">
+                    <thead>
+                        <tr>
+                            <th>Услуга</th>
+                            <th style="width:90px;">Цена/ед.</th>
+                            <th style="width:70px;">Кол.</th>
+                            <th style="width:100px;">Итого</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-items-tbody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;justify-content:flex-end;">
+                <div style="font-size:1.4rem;font-weight:700;color:var(--accent);">ИТОГО: <span id="modal-total"></span>
+                    ₽</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Order -->
+    <div class="modal-overlay" id="edit-order-modal">
+        <div class="modal" style="width:600px;">
+            <div class="modal-header">
+                <div class="modal-title" id="edit-order-title">Редактирование заказа</div>
+                <button class="modal-close" onclick="closeEditOrderModal()">✕</button>
+            </div>
+            <div class="table-wrap mb-2">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Услуга</th>
+                            <th style="width:100px;">Цена/ед.</th>
+                            <th style="width:80px;">Кол-во</th>
+                            <th style="width:100px;">Итого</th>
+                            <th style="width:36px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="edit-order-tbody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-size:1.1rem;font-weight:700;color:var(--accent);">ИТОГО: <span
+                        id="edit-order-total"></span> ₽</div>
+                <div class="flex-row">
+                    <button class="btn btn-ghost" onclick="closeEditOrderModal()">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveEditOrder()">💾 Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Client -->
+    <div class="modal-overlay" id="edit-client-modal">
+        <div class="modal" style="width:400px;">
+            <div class="modal-header">
+                <div class="modal-title">👤 Настройки клиента</div>
+                <button class="modal-close" onclick="closeEditClientModal()">✕</button>
+            </div>
+            <div class="form-group mb-2"><label>Телефон</label><input type="text" id="ec-phone" readonly
+                    style="opacity:.6;"></div>
+            <div class="form-group mb-2"><label>Скидка, % (0 = нет)</label><input type="number" id="ec-discount" min="0"
+                    max="100" inputmode="numeric"></div>
+            <div class="form-group mb-2"><label>Заметка</label><textarea id="ec-notes" rows="3"
+                    placeholder="VIP, имя и т.д."></textarea></div>
+            <div class="flex-row" style="justify-content:space-between;">
+                <button class="btn btn-danger" onclick="removeClientFromDb()">🗑 Удалить</button>
+                <div class="flex-row">
+                    <button class="btn btn-ghost" onclick="closeEditClientModal()">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveEditClient()">💾 Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="admin.js"></script>
+</body>
+
+</html>

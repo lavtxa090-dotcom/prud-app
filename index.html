@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta name="theme-color" content="#00d4aa">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Чистый пруд — Учёт услуг</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: radial-gradient(ellipse at 60% 40%, rgba(0, 212, 170, 0.08) 0%, transparent 65%), var(--bg);
+        }
+
+        .start-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            padding: 32px 20px;
+            width: 100%;
+            max-width: 460px;
+        }
+
+        .logo {
+            text-align: center;
+        }
+
+        .logo-icon {
+            font-size: 64px;
+            margin-bottom: 8px;
+        }
+
+        .logo-title {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent) 0%, #00a8ff 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-subtitle {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-top: 4px;
+            letter-spacing: .5px;
+        }
+
+        .mode-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .mode-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            transition: all 0.2s;
+        }
+
+        .mode-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 212, 170, .15);
+        }
+
+        .mode-card .card-icon {
+            font-size: 40px;
+            flex-shrink: 0;
+        }
+
+        .mode-card .card-text h3 {
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+
+        .mode-card .card-text p {
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.5;
+        }
+
+        .mode-card.cashier-card:hover {
+            border-color: var(--amber);
+            box-shadow: 0 8px 24px rgba(240, 165, 0, .15);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(0, 0, 0, .7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .2s;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 28px;
+            width: 360px;
+            max-width: 94vw;
+            box-shadow: var(--shadow);
+            transform: translateY(20px);
+            transition: transform .2s;
+        }
+
+        .modal-overlay.open .modal {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 22px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+        }
+
+        .modal-close:hover {
+            color: var(--text);
+            background: var(--surface2);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0)
+            }
+
+            20% {
+                transform: translateX(-8px)
+            }
+
+            40% {
+                transform: translateX(8px)
+            }
+
+            60% {
+                transform: translateX(-6px)
+            }
+
+            80% {
+                transform: translateX(6px)
+            }
+        }
+
+        .shake {
+            animation: shake .4s ease;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="start-screen">
+        <div class="logo">
+            <div class="logo-icon">🏖</div>
+            <div class="logo-title">Чистый пруд</div>
+            <div class="logo-subtitle">Система учёта услуг и продаж</div>
+        </div>
+
+        <div class="mode-cards">
+            <div class="mode-card cashier-card" onclick="openCashier()">
+                <div class="card-icon">💳</div>
+                <div class="card-text">
+                    <h3>Режим кассира</h3>
+                    <p>Оформление заказов и печать билетов</p>
+                </div>
+            </div>
+
+            <div class="mode-card" onclick="openAdmin()">
+                <div class="card-icon">🛠 <span id="lock-icon" style="font-size:18px; display:none;">🔒</span></div>
+                <div class="card-text">
+                    <h3>Режим администратора</h3>
+                    <p>Управление услугами, статистика, настройки</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password modal -->
+    <div class="modal-overlay" id="pw-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">🔒 Вход для администратора</div>
+                <button class="modal-close" onclick="closePwModal()">✕</button>
+            </div>
+            <div class="form-group">
+                <label>Пароль</label>
+                <input type="password" id="pw-input" placeholder="Введите пароль"
+                    onkeydown="if(event.key==='Enter') checkPassword()">
+            </div>
+            <div id="pw-error" style="color:var(--danger); font-size:13px; min-height:18px; margin-bottom:12px;"></div>
+            <button class="btn btn-primary w-100" onclick="checkPassword()">Войти</button>
+        </div>
+    </div>
+
+    <script src="db.js"></script>
+    <script>
+        // PWA Service Worker registration
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(() => { });
+        }
+
+        function openCashier() {
+            window.location.href = 'cashier.html';
+        }
+
+        function openAdmin() {
+            const hash = DB.getSetting('admin_password_hash');
+            if (!hash) {
+                window.location.href = 'admin.html';
+            } else {
+                document.getElementById('pw-modal').classList.add('open');
+                setTimeout(() => document.getElementById('pw-input').focus(), 100);
+                // Show lock icon
+                document.getElementById('lock-icon').style.display = 'inline';
+            }
+        }
+
+        async function checkPassword() {
+            const input = document.getElementById('pw-input').value;
+            const stored = DB.getSetting('admin_password_hash');
+            const inputHash = await sha256(input);
+            if (inputHash === stored) {
+                window.location.href = 'admin.html';
+            } else {
+                const modal = document.querySelector('.modal');
+                modal.classList.add('shake');
+                setTimeout(() => modal.classList.remove('shake'), 400);
+                document.getElementById('pw-error').textContent = '❌ Неверный пароль';
+                document.getElementById('pw-input').value = '';
+                document.getElementById('pw-input').focus();
+            }
+        }
+
+        function closePwModal() {
+            document.getElementById('pw-modal').classList.remove('open');
+            document.getElementById('pw-input').value = '';
+            document.getElementById('pw-error').textContent = '';
+        }
+
+        // Check on load if password exists → show lock icon on admin button
+        window.addEventListener('load', () => {
+            const hash = DB.getSetting('admin_password_hash');
+            if (hash) document.getElementById('lock-icon').style.display = 'inline';
+        });
+    </script>
+</body>
+
+</html>

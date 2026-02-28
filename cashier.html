@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta name="theme-color" content="#00d4aa">
+    <title>Кассир — Чистый пруд</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .main-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Left panel */
+        .left-panel {
+            width: 300px;
+            flex-shrink: 0;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        @media (max-width:600px) {
+            .left-panel {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+        }
+
+        .panel-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            color: var(--text-dim);
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .service-price-badge {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-size: 13px;
+            color: var(--text-dim);
+            min-height: 40px;
+        }
+
+        .service-price-badge.has-price {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .add-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Right panel */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .basket-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .basket-title {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .basket-count {
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .basket-table-wrap {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .basket-footer {
+            padding: 14px 20px;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .total-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+
+        .total-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .footer-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        #empty-basket {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-dim);
+            gap: 12px;
+        }
+
+        .basket-table {
+            display: none;
+        }
+
+        .basket-table.visible {
+            display: table;
+        }
+
+        .del-btn {
+            background: transparent;
+            border: none;
+            color: var(--danger);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: background .15s;
+            line-height: 1;
+        }
+
+        .del-btn:hover {
+            background: rgba(224, 82, 82, .15);
+        }
+
+        /* Mobile layout */
+        @media (max-width:600px) {
+            .main-layout {
+                flex-direction: column;
+            }
+
+            .right-panel {
+                min-height: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div>
+            <div class="topbar-title">💳 Режим кассира</div>
+            <div class="topbar-subtitle">Оформление заказов</div>
+        </div>
+        <button class="btn btn-ghost" onclick="goHome()">← Выход</button>
+    </div>
+
+    <div class="main-layout">
+        <!-- Left: add item -->
+        <div class="left-panel">
+            <div class="panel-title">Добавить позицию</div>
+
+            <div class="form-group">
+                <label>Услуга</label>
+                <select id="service-select" onchange="onServiceChange()">
+                    <option value="">— Выберите услугу —</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Цена за единицу</label>
+                <div class="service-price-badge" id="price-badge">Сначала выберите услугу</div>
+            </div>
+
+            <div class="form-group">
+                <label>Количество</label>
+                <input type="number" id="qty-input" value="1" min="1" max="9999" inputmode="numeric">
+            </div>
+
+            <div class="add-buttons">
+                <button class="btn btn-primary w-100" id="add-btn" onclick="addItem()"
+                    style="font-size:15px; padding:12px;">
+                    ＋ Добавить
+                </button>
+            </div>
+
+            <hr style="border-color:var(--border); margin:2px 0;">
+
+            <div class="form-group">
+                <label>📱 Телефон клиента (необязательно)</label>
+                <input type="tel" id="phone-input" placeholder="+7 (___) ___-__-__" oninput="onPhoneChange()"
+                    inputmode="tel">
+            </div>
+            <div id="client-badge" style="display:none; background:var(--surface2); border:1px solid var(--border);
+           border-radius:8px; padding:10px 14px; font-size:13px; line-height:1.6;"></div>
+        </div>
+
+        <!-- Right: basket -->
+        <div class="right-panel">
+            <div class="basket-header">
+                <div class="basket-title">🛒 Текущий заказ</div>
+                <div class="basket-count" id="basket-count">— позиций</div>
+            </div>
+
+            <div class="basket-table-wrap">
+                <div id="empty-basket">
+                    <div style="font-size:48px;">🛒</div>
+                    <div style="font-size:15px;">Корзина пуста</div>
+                    <div style="font-size:12px;">Добавьте услуги слева</div>
+                </div>
+                <table class="basket-table" id="basket-table">
+                    <thead>
+                        <tr>
+                            <th style="width:36px;">№</th>
+                            <th>Услуга</th>
+                            <th style="width:70px;">Кол</th>
+                            <th style="width:100px;">Цена</th>
+                            <th style="width:110px;">Итого</th>
+                            <th style="width:44px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="basket-tbody"></tbody>
+                </table>
+            </div>
+
+            <div class="basket-footer">
+                <div>
+                    <div class="total-label">Итого к оплате</div>
+                    <div class="total-value"><span id="total-amount">0.00</span> <span
+                            style="font-size:1rem;color:var(--text-dim);">₽</span></div>
+                </div>
+                <div class="footer-actions">
+                    <button class="btn btn-ghost" id="clear-btn" onclick="clearOrder()" disabled>🗑 Очистить</button>
+                    <button class="btn btn-amber" id="print-btn" onclick="printOrder()" disabled
+                        style="font-size:15px; padding:12px 22px;">
+                        🖨 Печать билета
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="cashier.js"></script>
+</body>
+
+</html>
