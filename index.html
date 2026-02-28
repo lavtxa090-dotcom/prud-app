@@ -261,8 +261,8 @@
         }
 
         function openAdmin() {
-            const hash = DB.getSetting('admin_password_hash');
-            if (!hash) {
+            const hasPw = DB.getSetting('admin_password_hash');
+            if (!hasPw) {
                 window.location.href = 'admin.html';
             } else {
                 document.getElementById('pw-modal').classList.add('open');
@@ -274,9 +274,10 @@
 
         async function checkPassword() {
             const input = document.getElementById('pw-input').value;
-            const stored = DB.getSetting('admin_password_hash');
             const inputHash = await sha256(input);
-            if (inputHash === stored) {
+            const savedHash = DB.getSetting('admin_password_hash');
+
+            if (inputHash === savedHash) {
                 window.location.href = 'admin.html';
             } else {
                 const modal = document.querySelector('.modal');
@@ -296,8 +297,8 @@
 
         // Check on load if password exists → show lock icon on admin button
         window.addEventListener('load', () => {
-            const hash = DB.getSetting('admin_password_hash');
-            if (hash) document.getElementById('lock-icon').style.display = 'inline';
+            const hasPw = DB.getSetting('admin_password_hash');
+            if (hasPw) document.getElementById('lock-icon').style.display = 'inline';
         });
     </script>
 </body>

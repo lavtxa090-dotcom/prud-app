@@ -1,237 +1,280 @@
-/**
- * db.js — Браузерная версия базы данных (localStorage)
- * API идентичен Node.js-версии, но работает в любом браузере без Node.js.
- */
 'use strict';
+// db.js — Оффлайн-клиент с фоновой синхронизацией
+// Все данные хранятся локально (localStorage) и отправляются на сервер асинхронно
 
-// ─── Конфигурация ───
 const AppConfig = {
     ORG_NAME: 'Чистый пруд',
     ORG_SUBTITLE: 'Территория отдыха',
     FOOTER_TEXT: 'Спасибо за посещение!',
 };
 
-// ─── Хранилище ───
-const STORAGE_KEY = 'chisty_prud_db';
+const API_BASE = 'http://155.212.222.218:3000/api';
 
-function emptyDb() {
-    return {
-        services: [],
-        orders: [],
-        order_items: [],
-        _seq: { service: 0, order: 0, item: 0 },
-        _settings: {},
-        _clients: {},
-    };
+// ─── UUID Генератор для чеков ───
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 }
 
-function _load() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return emptyDb();
-        const data = JSON.parse(raw);
-        // Миграции
-        if (!data._seq) data._seq = { service: 0, order: 0, item: 0 };
-        if (!data._settings) data._settings = {};
-        if (!data._clients) data._clients = {};
-        data.orders.forEach((o) => { if (o.phone === undefined) o.phone = ''; });
-        data.orders.forEach((o) => { if (o.discount === undefined) o.discount = 0; });
-        return data;
-    } catch (e) {
-        return emptyDb();
-    }
-}
-
-function _save(data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-// ─── Публичный API ───
 const DB = {
+    _data: null,
 
-    // ── Услуги ──
-    getAllServices() {
-        return _load().services;
+    // ─── Инициализация ───
+    initDB() {
+        if (this._data) return;
+        const saved = localStorage.getItem('chisty_prud_db');
+        if (saved) {
+            try { this._data = JSON.parse(saved); } catch (e) { }
+        }
+        if (!this._data) this._data = this.emptyDb();
+
+        // Миграция очередей
+        if (!this._data._sync_queue) this._data._sync_queue = [];
+
+        this.startSyncWorker();
     },
 
+    emptyDb() {
+        return {
+            services: [],
+            orders: [], // Теперь тут uuid вместо id
+            order_items: [],
+            _seq: { service: 0 },
+            _settings: {},
+            _clients: {},
+            _sync_queue: [] // Очередь на отправку: [ {type: 'order', data: {...}}, {type: 'client', data: {...}} ]
+        };
+    },
+
+    _save() {
+        localStorage.setItem('chisty_prud_db', JSON.stringify(this._data));
+    },
+
+    // ─── Очередь Синхронизации ───
+    addToSyncQueue(type, data) {
+        this._data._sync_queue.push({ type, data, ts: Date.now() });
+        this._save();
+    },
+
+    startSyncWorker() {
+        // Каждые 10 секунд пытаемся отправить данные
+        setInterval(async () => {
+            if (this._data._sync_queue.length === 0) return;
+
+            // Временно копируем очередь (пока отправляем, могли нападать новые чеки)
+            const queue = [...this._data._sync_queue];
+            try {
+                const res = await fetch(API_BASE + '/sync/push', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: queue })
+                });
+
+                if (res.ok) {
+                    // Успешно отправили! Удаляем отправленные элементы из реальной очереди
+                    const sentTs = queue.map(q => q.ts);
+                    this._data._sync_queue = this._data._sync_queue.filter(q => !sentTs.includes(q.ts));
+                    this._save();
+
+                    // Запрашиваем актуальные услуги и клиентов с сервера (pull)
+                    this.pullFromServer();
+                }
+            } catch (e) {
+                // Сервер недоступен или нет инета, ничего не делаем, попробуем позже
+                console.log('[Sync] Ошибка синхронизации (оффлайн):', e.message);
+            }
+        }, 10000); // 10 сек
+
+        // Запрашиваем при каждом старте
+        this.pullFromServer();
+    },
+
+    async pullFromServer() {
+        try {
+            const res = await fetch(API_BASE + '/sync/pull');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            // Получаем эталонные Услуги, Настройки и Клиентов с сервера
+            if (data.services) this._data.services = data.services;
+            if (data.settings) Object.assign(this._data._settings, data.settings);
+            // Клиентов смерджим (серверные главнее, если нет конфликтов)
+            if (data.clients) {
+                for (const phone in data.clients) {
+                    this._data._clients[phone] = data.clients[phone];
+                }
+            }
+            this._save();
+        } catch (e) { }
+    },
+
+    // ── Услуги (только чтение на планшете, ред. на сервере, но пока оставим как есть) ──
+    // Для простоты, услуги тоже можно изменять локально и отправлять
+    getAllServices() { return [...this._data.services].sort((a, b) => a.name.localeCompare(b.name, 'ru')); },
+
+    // Внимание! Добавление услуг переделаем под синхронизацию
     addService(name, price, rules) {
-        const db = _load();
-        db._seq.service++;
-        db.services.push({ id: db._seq.service, name, price: +price, rules: rules || '' });
-        _save(db);
-        return db._seq.service;
+        this._data._seq.service += 1;
+        const id = this._data._seq.service;
+        const svc = { id, name, price, rules: rules || null };
+        this._data.services.push(svc);
+        this.addToSyncQueue('service_add', svc);
+        this._save();
+        return id;
     },
-
     updateService(id, name, price, rules) {
-        const db = _load();
-        const svc = db.services.find((s) => s.id === id);
-        if (svc) { svc.name = name; svc.price = +price; svc.rules = rules || ''; }
-        _save(db);
+        const s = this._data.services.find(x => x.id === id);
+        if (s) {
+            s.name = name; s.price = price; s.rules = rules;
+            this.addToSyncQueue('service_update', s);
+            this._save();
+        }
     },
-
     deleteService(id) {
-        const db = _load();
-        db.services = db.services.filter((s) => s.id !== id);
-        _save(db);
+        this._data.services = this._data.services.filter(s => s.id !== id);
+        this.addToSyncQueue('service_delete', { id });
+        this._save();
     },
 
-    // ── Заказы ──
+    // ── Заказы (Оффлайн-совместимые счетчики) ──
     createOrder(items, phone, discountPct) {
-        const db = _load();
-        const discount = Math.min(100, Math.max(0, Number(discountPct) || 0));
         const subtotal = items.reduce((s, i) => s + i.service_price * i.quantity, 0);
+        const discount = Math.min(100, Math.max(0, Number(discountPct) || 0));
         const total = +(subtotal * (1 - discount / 100)).toFixed(2);
-        db._seq.order++;
-        const orderId = db._seq.order;
-        db.orders.push({ id: orderId, datetime: Date.now(), total, phone: (phone || '').trim(), discount });
+
+        // Используем UUID вместо цифр (чтобы разные планшеты не сделали заказ с id=10 одновременно)
+        const orderId = generateUUID();
+        // Но для красоты чека сделаем короткий "Билет №" (последние 4 цифры+буквы)
+        const shortId = orderId.split('-')[1];
+
+        const order = { uuid: orderId, shortId: shortId, datetime: Date.now(), total, phone: (phone || '').trim(), discount };
+        this._data.orders.push(order);
+
+        // Позиции заказа
+        const orderItems = [];
         for (const item of items) {
-            db._seq.item++;
-            db.order_items.push({
-                id: db._seq.item,
-                order_id: orderId,
-                service_id: item.service_id || null,
+            const itm = {
+                uuid: generateUUID(),
+                order_uuid: orderId,
+                service_id: item.service_id,
                 service_name: item.service_name,
                 service_price: item.service_price,
                 quantity: item.quantity,
-            });
+            };
+            this._data.order_items.push(itm);
+            orderItems.push(itm);
         }
-        _save(db);
-        return orderId;
+
+        // Кладём в очередь на отправку на Сервер
+        this.addToSyncQueue('order_create', { order, items: orderItems });
+        this._save();
+
+        return shortId;
     },
 
-    deleteOrder(orderId) {
-        const db = _load();
-        db.orders = db.orders.filter((o) => o.id !== orderId);
-        db.order_items = db.order_items.filter((i) => i.order_id !== orderId);
-        _save(db);
+    deleteOrder(uuid) {
+        this._data.orders = this._data.orders.filter(o => (o.uuid || o.id) !== uuid);
+        this._data.order_items = this._data.order_items.filter(i => (i.order_uuid || i.order_id) !== uuid);
+        this.addToSyncQueue('order_delete', { uuid });
+        this._save();
     },
 
-    updateOrder(orderId, items) {
-        const db = _load();
-        const order = db.orders.find((o) => o.id === orderId);
+    updateOrder(uuid, items) {
+        const order = this._data.orders.find(o => (o.uuid || o.id) === uuid);
         if (!order) return;
-        db.order_items = db.order_items.filter((i) => i.order_id !== orderId);
+
+        this._data.order_items = this._data.order_items.filter(i => (i.order_uuid || i.order_id) !== uuid);
         const subtotal = items.reduce((s, i) => s + i.service_price * i.quantity, 0);
         order.total = +(subtotal * (1 - (order.discount || 0) / 100)).toFixed(2);
+
+        const orderItems = [];
         for (const item of items) {
-            db._seq.item++;
-            db.order_items.push({
-                id: db._seq.item,
-                order_id: orderId,
-                service_id: item.service_id || null,
-                service_name: item.service_name,
-                service_price: item.service_price,
-                quantity: item.quantity,
-            });
+            const itm = {
+                uuid: generateUUID(), order_uuid: uuid,
+                service_id: item.service_id, service_name: item.service_name,
+                service_price: item.service_price, quantity: item.quantity,
+            };
+            this._data.order_items.push(itm);
+            orderItems.push(itm);
         }
-        _save(db);
+        this.addToSyncQueue('order_update', { uuid, order, items: orderItems });
+        this._save();
     },
 
+    getAllOrders() { return this._data.orders; },
     getOrders(fromMs, toMs) {
-        return _load().orders
-            .filter((o) => o.datetime >= fromMs && o.datetime <= toMs)
-            .sort((a, b) => b.datetime - a.datetime);
+        return this._data.orders.filter(o => o.datetime >= fromMs && o.datetime <= toMs).sort((a, b) => b.datetime - a.datetime);
     },
-
-    getAllOrders() {
-        return _load().orders.sort((a, b) => b.datetime - a.datetime);
-    },
-
-    getOrderItems(orderId) {
-        return _load().order_items.filter((i) => i.order_id === orderId);
-    },
-
-    getOrderSummary(orderId) {
-        const items = _load().order_items.filter((i) => i.order_id === orderId);
-        if (!items.length) return '—';
-        return items.map((i) => `${i.service_name} ×${i.quantity}`).join(', ');
-    },
+    getOrderItems(uuid) { return this._data.order_items.filter(i => (i.order_uuid || i.order_id) === uuid); },
+    getOrderSummary(uuid) { return this.getOrderItems(uuid).map(i => `${i.service_name} ×${i.quantity}`).join(', '); },
 
     getStatsByPeriod(fromMs, toMs) {
-        const db = _load();
-        const orders = db.orders.filter((o) => o.datetime >= fromMs && o.datetime <= toMs);
-        const ids = new Set(orders.map((o) => o.id));
-        const items = db.order_items.filter((i) => ids.has(i.order_id));
-
-        const revenue = orders.reduce((s, o) => s + o.total, 0);
-        const orderCount = orders.length;
-        const itemCount = items.reduce((s, i) => s + i.quantity, 0);
-
-        // По услугам
-        const svcMap = {};
-        for (const item of items) {
-            if (!svcMap[item.service_name]) svcMap[item.service_name] = { total_qty: 0, total_revenue: 0 };
-            svcMap[item.service_name].total_qty += item.quantity;
-            svcMap[item.service_name].total_revenue += item.service_price * item.quantity;
+        const orderIds = new Set(this.getOrders(fromMs, toMs).map(o => o.uuid || o.id));
+        const stats = { revenue: 0, orderCount: orderIds.size, itemCount: 0, orders: this.getOrders(fromMs, toMs), byService: [] };
+        const map = {};
+        for (const item of this._data.order_items) {
+            if (!orderIds.has(item.order_uuid || item.order_id)) continue;
+            stats.revenue += item.service_price * item.quantity;
+            stats.itemCount += item.quantity;
+            if (!map[item.service_name]) map[item.service_name] = { service_name: item.service_name, total_qty: 0, total_revenue: 0 };
+            map[item.service_name].total_qty += item.quantity;
+            map[item.service_name].total_revenue += item.service_price * item.quantity;
         }
-        const byService = Object.entries(svcMap).map(([service_name, v]) => ({ service_name, ...v }));
-
-        return { revenue, orderCount, itemCount, byService, orders };
+        stats.byService = Object.values(map).sort((a, b) => b.total_revenue - a.total_revenue);
+        return stats;
     },
 
     // ── Настройки ──
-    getSetting(key) {
-        return _load()._settings[key] || null;
-    },
-
+    getSetting(key) { return this._data._settings[key] || null; },
     setSetting(key, value) {
-        const db = _load();
-        if (value === null || value === undefined) { delete db._settings[key]; }
-        else { db._settings[key] = value; }
-        _save(db);
+        if (value === null) delete this._data._settings[key]; else this._data._settings[key] = value;
+        this.addToSyncQueue('setting_set', { key, value });
+        this._save();
     },
 
     // ── Клиенты ──
-    getClientByPhone(phone) {
-        if (!phone) return null;
-        return _load()._clients[phone] || null;
-    },
-
+    getClientByPhone(phone) { if (!phone) return null; return this._data._clients[phone] || null; },
     setClientDiscount(phone, discount, notes) {
         if (!phone) return;
-        const db = _load();
-        db._clients[phone] = { discount: Math.min(100, Math.max(0, Number(discount) || 0)), notes: notes || '' };
-        _save(db);
+        this._data._clients[phone] = { discount: Math.min(100, Math.max(0, Number(discount) || 0)), notes: notes || '' };
+        this.addToSyncQueue('client_set', { phone, data: this._data._clients[phone] });
+        this._save();
     },
-
-    deleteClient(phone) {
-        if (!phone) return;
-        const db = _load();
-        delete db._clients[phone];
-        _save(db);
-    },
+    deleteClient(phone) { if (!phone) return; delete this._data._clients[phone]; this.addToSyncQueue('client_delete', { phone }); this._save(); },
 
     getAllClients() {
-        const db = _load();
+        // Локальный подсчет статистики по клиентам (для админки)
         const stats = {};
-        for (const o of db.orders) {
+        for (const o of this._data.orders) {
             if (!o.phone) continue;
             if (!stats[o.phone]) stats[o.phone] = { visits: 0, total_spend: 0, last_visit: 0 };
             stats[o.phone].visits++;
             stats[o.phone].total_spend += o.total;
             if (o.datetime > stats[o.phone].last_visit) stats[o.phone].last_visit = o.datetime;
         }
-        const allPhones = new Set([...Object.keys(db._clients), ...Object.keys(stats)]);
-        return [...allPhones].map((phone) => ({
+        const all = new Set([...Object.keys(this._data._clients), ...Object.keys(stats)]);
+        return [...all].map(phone => ({
             phone,
-            discount: (db._clients[phone] || {}).discount || 0,
-            notes: (db._clients[phone] || {}).notes || '',
+            discount: (this._data._clients[phone] || {}).discount || 0,
+            notes: (this._data._clients[phone] || {}).notes || '',
             visits: (stats[phone] || {}).visits || 0,
             total_spend: (stats[phone] || {}).total_spend || 0,
-            last_visit: (stats[phone] || {}).last_visit || 0,
+            last_visit: (stats[phone] || {}).last_visit || 0
         })).sort((a, b) => b.visits - a.visits);
-    },
+    }
 };
 
-// ─── SHA-256 через Web Crypto API (async) ───
+DB.initDB();
+
 async function sha256(str) {
     const buf = new TextEncoder().encode(str);
     const hash = await crypto.subtle.digest('SHA-256', buf);
     return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ─── Печать билета ───
-function printReceipt(orderId, datetime, items, phone, discountPct, globalRules) {
+function printReceipt(orderShortId, datetime, items, phone, discountPct, globalRules) {
     const discount = Number(discountPct) || 0;
     const subtotal = items.reduce((s, i) => s + i.service_price * i.quantity, 0);
     const total = +(subtotal * (1 - discount / 100)).toFixed(2);
@@ -252,7 +295,7 @@ function printReceipt(orderId, datetime, items, phone, discountPct, globalRules)
         ? `<hr><div class="rules-title">─── ПРАВИЛА ТЕРРИТОРИИ ───</div><div class="rules-text">${escHtml(globalRules).replace(/\n/g, '<br>')}</div>` : '';
 
     const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">
-<title>Билет №${orderId}</title>
+<title>Билет №${orderShortId}</title>
 <style>
   @page { width:80mm; margin:4mm 2mm; }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -269,7 +312,7 @@ function printReceipt(orderId, datetime, items, phone, discountPct, globalRules)
 </style></head><body>
   <div class="org-name">${escHtml(AppConfig.ORG_NAME)}</div>
   <div class="org-sub">${escHtml(AppConfig.ORG_SUBTITLE || '')}</div>
-  <div class="info">${dateStr} &nbsp; Билет №${orderId}</div>
+  <div class="info">${dateStr} &nbsp; Билет №${orderShortId}</div>
   ${phoneLine}
   <hr>
   ${itemsHtml}

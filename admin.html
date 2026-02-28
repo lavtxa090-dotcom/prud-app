@@ -158,6 +158,8 @@
                     <button class="btn btn-ghost" onclick="setToday()">Сегодня</button>
                     <button class="btn btn-ghost" onclick="setThisMonth()">Месяц</button>
                     <button class="btn btn-primary" onclick="applyFilter()">Применить</button>
+                    <button class="btn btn-amber" id="print-stats-btn" onclick="printStats()" disabled
+                        title="Сначала примените фильтр" style="margin-left:auto;">🖨 Печать статистики</button>
                 </div>
             </div>
 
@@ -207,7 +209,10 @@
         <div class="tab-panel" id="tab-clients">
             <div class="section-header">
                 <h2>👥 База клиентов</h2>
-                <button class="btn btn-secondary" onclick="renderClients()">🔄 Обновить</button>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-primary" onclick="openAddClientModal()">＋ Добавить клиента</button>
+                    <button class="btn btn-secondary" onclick="renderClients()">🔄 Обновить</button>
+                </div>
             </div>
             <div class="table-wrap">
                 <table>
@@ -342,11 +347,11 @@
     <div class="modal-overlay" id="edit-client-modal">
         <div class="modal" style="width:400px;">
             <div class="modal-header">
-                <div class="modal-title">👤 Настройки клиента</div>
+                <div class="modal-title" id="client-modal-title">👤 Настройки клиента</div>
                 <button class="modal-close" onclick="closeEditClientModal()">✕</button>
             </div>
-            <div class="form-group mb-2"><label>Телефон</label><input type="text" id="ec-phone" readonly
-                    style="opacity:.6;"></div>
+            <div class="form-group mb-2"><label>Телефон</label><input type="text" id="ec-phone"
+                    placeholder="Например: +79991234567"></div>
             <div class="form-group mb-2"><label>Скидка, % (0 = нет)</label><input type="number" id="ec-discount" min="0"
                     max="100" inputmode="numeric"></div>
             <div class="form-group mb-2"><label>Заметка</label><textarea id="ec-notes" rows="3"

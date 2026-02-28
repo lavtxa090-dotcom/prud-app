@@ -1,5 +1,5 @@
 'use strict';
-// cashier.js — PWA browser version (no require/fs)
+// cashier.js — PWA API Client (Async)
 // DB, printReceipt, sha256, AppConfig, escHtml defined in db.js
 
 let basket = [];
@@ -131,7 +131,7 @@ function renderBasket() {
     clearBtn.disabled = false; printBtn.disabled = false;
 }
 
-async function printOrder() {
+function printOrder() {
     if (!basket.length) return;
     const btn = document.getElementById('print-btn');
     btn.disabled = true; btn.textContent = '⏳ Сохранение...';
@@ -141,7 +141,7 @@ async function printOrder() {
         const rules = DB.getSetting('global_rules') || '';
         const orderId = DB.createOrder(basket, phone, discount);
         printReceipt(orderId, Date.now(), basket, phone, discount, rules);
-        showNotif(`✅ Билет №${orderId} успешно оформлен`);
+        showNotif(`✅ Билет №${orderId} успешно оформлен (оффлайн)`);
         clearOrder();
     } catch (e) {
         showNotif('Ошибка: ' + e.message, true);
