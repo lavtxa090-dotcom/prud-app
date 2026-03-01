@@ -8,7 +8,7 @@ const AppConfig = {
     FOOTER_TEXT: 'Спасибо за посещение!',
 };
 
-const API_BASE = 'http://155.212.222.218:3000/api';
+const API_BASE = 'http://85.198.68.191:3000/api';
 
 // ─── UUID Генератор для чеков ───
 function generateUUID() {
@@ -50,6 +50,33 @@ const DB = {
 
     _save() {
         localStorage.setItem('chisty_prud_db', JSON.stringify(this._data));
+        this._backupToLocalFile(); // Сохраняем на ЖД компьютера, если это запущено через Запустить.bat
+    },
+
+    // ─── Локальный бэкап (Только для ПК / NW.js) ───
+    _backupToLocalFile() {
+        if (typeof nw !== 'undefined') {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                // process.cwd() в NW.js указывает на папку с приложением
+                const dataDir = path.join(process.cwd(), 'data');
+                if (!fs.existsSync(dataDir)) {
+                    fs.mkdirSync(dataDir, { recursive: true });
+                }
+                const backupFile = path.join(dataDir, 'pc_backup.json');
+                const backupData = {
+                    metadata: {
+                        date: new Date().toISOString(),
+                        version: '1.0'
+                    },
+                    data: this._data
+                };
+                fs.writeFileSync(backupFile, JSON.stringify(backupData, null, 2), 'utf8');
+            } catch (err) {
+                console.error('Ошибка бэкапа на ПК:', err);
+            }
+        }
     },
 
     // ─── Очередь Синхронизации ───

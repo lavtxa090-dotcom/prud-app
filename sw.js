@@ -1,5 +1,5 @@
 // Service Worker — кэширует всё приложение для оффлайн-работы
-const CACHE = 'chisty-prud-v4';
+const CACHE = 'chisty-prud-v5';
 const FILES = [
     './',
     './index.html',
